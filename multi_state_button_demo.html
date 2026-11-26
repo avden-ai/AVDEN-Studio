@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AV Panel · эталон компонентов с множеством состояний</title>
+<style id="panel-css">
+:root{
+  --bg0:#070D16; --bg1:#0A1420; --bg2:#0E1C2C; --surf:#122336; --surf2:#17293E;
+  --line:#22405C; --line2:#2E5375; --txt:#E9F1F8; --mut:#8CA3B8; --dim:#5D7690;
+  --grn:#12B981; --cyn:#22D3EE; --blu:#3E8BFF; --vio:#8B5CF6; --amb:#F5A623; --red:#F0455A;
+  --grad:linear-gradient(135deg,#12B981 0%,#22D3EE 55%,#3E8BFF 100%);
+}
+*{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body{ height:100%; }
+body{ margin:0; overflow:hidden; background:#04070C; color:var(--txt);
+  font-family:Inter,system-ui,sans-serif; user-select:none; }
+#viewport{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+  background:radial-gradient(1100px 700px at 50% 42%,#0A1622,#04070C 70%); }
+#stage{ position:relative; width:1280px; height:720px; flex:none; overflow:hidden;
+  transform-origin:center center; border-radius:18px; border:1px solid #1E3A54; background:var(--bg1);
+  box-shadow:0 40px 110px -30px #000, 0 0 80px -34px rgba(34,211,238,.25);
+  display:flex; flex-direction:column; }
+#stage::before{ content:""; position:absolute; inset:0; pointer-events:none;
+  background:radial-gradient(680px 400px at 10% -10%,rgba(18,185,129,.13),transparent 60%),
+             radial-gradient(720px 460px at 98% 110%,rgba(62,139,255,.12),transparent 60%); }
+header,nav{ position:relative; z-index:2; flex:none; }
+header{ height:56px; display:flex; align-items:center; gap:12px; padding:0 16px;
+  border-bottom:1px solid var(--line); background:linear-gradient(180deg,rgba(23,41,62,.94),rgba(16,29,45,.94)); }
+.logo{ width:30px; height:30px; border-radius:9px; background:var(--grad); display:grid; place-items:center;
+  color:#04241A; font-weight:800; font-size:13px; box-shadow:0 4px 16px -6px rgba(34,211,238,.8); }
+.h-title{ font-size:14px; font-weight:800; }
+.h-sub{ font-size:10.5px; color:var(--mut); font-weight:600; }
+.chip{ display:inline-flex; align-items:center; gap:7px; height:28px; padding:0 11px; border-radius:99px;
+  border:1px solid var(--line); background:rgba(13,26,41,.6); font-size:11.5px; font-weight:700; color:var(--mut); }
+.chip .dot{ width:7px; height:7px; border-radius:99px; background:var(--grn); box-shadow:0 0 8px var(--grn); }
+.clock{ margin-left:auto; font-family:"JetBrains Mono",ui-monospace,monospace; font-size:19px; font-weight:700; }
+#screens{ position:relative; flex:1; min-height:0; z-index:1; }
+.screen{ position:absolute; inset:0; padding:18px 22px; display:none; flex-direction:column; }
+.screen.is-active{ display:flex; animation:in .24s ease both; }
+@keyframes in{ from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:none;} }
+h1{ margin:0 0 14px; font-size:21px; font-weight:800; }
+.grid3{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+.grid2{ display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
+.card{ border:1px solid var(--line); border-radius:15px; padding:16px;
+  background:linear-gradient(180deg,rgba(23,41,62,.92),rgba(16,30,47,.94));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05); }
+.card h3{ margin:0 0 4px; font-size:15px; font-weight:800; }
+.card p{ margin:0 0 14px; font-size:12.5px; color:var(--mut); line-height:1.5; }
+
+/* ==== КОМПОНЕНТ: кнопка с множеством состояний ==== */
+.av-btn{
+  --st-c:#22D3EE; --st-bg:rgba(34,211,238,.10);
+  position:relative; display:flex; align-items:center; gap:11px; width:100%; min-height:62px; padding:0 16px;
+  border-radius:14px; cursor:pointer; text-align:left; font-family:inherit; color:var(--txt);
+  border:1px solid color-mix(in srgb, var(--st-c) 55%, transparent);
+  background:linear-gradient(180deg, var(--st-bg), rgba(13,26,41,.7));
+  box-shadow:0 0 22px -12px var(--st-c), inset 0 1px 0 rgba(255,255,255,.05);
+  transition:transform .12s, box-shadow .2s, border-color .2s, background .2s;
+}
+.av-btn:hover{ filter:brightness(1.12); }
+.av-btn:active{ transform:scale(.98); }
+.av-btn:focus-visible{ outline:2px solid var(--cyn); outline-offset:2px; }
+.av-ico{ width:34px; height:34px; flex:none; display:grid; place-items:center; color:var(--st-c); }
+.av-ico img,.av-ico svg{ width:30px; height:30px; display:block; object-fit:contain; }
+.av-label{ flex:1; font-size:14.5px; font-weight:800; }
+.av-btn::after{ content:attr(data-state-index); position:absolute; right:12px; top:8px;
+  font-family:"JetBrains Mono",monospace; font-size:9.5px; font-weight:700; color:var(--st-c); opacity:.75; }
+.av-btn.compact{ min-height:52px; }
+.av-btn.compact .av-label{ font-size:13px; }
+
+.row{ display:flex; align-items:center; gap:12px; }
+.lbl{ flex:1; font-size:13.5px; font-weight:700; }
+.val{ font-family:"JetBrains Mono",monospace; font-size:16px; font-weight:700; color:var(--cyn); min-width:40px; text-align:right; }
+input[type=range].av-range{ -webkit-appearance:none; appearance:none; flex:2; height:26px; background:none; cursor:pointer; }
+input[type=range].av-range::-webkit-slider-runnable-track{ height:8px; border-radius:99px;
+  background:linear-gradient(90deg,var(--grn),var(--cyn) var(--p,60%),#14293E var(--p,60%)); }
+input[type=range].av-range::-webkit-slider-thumb{ -webkit-appearance:none; width:24px; height:24px; margin-top:-8px;
+  border-radius:99px; background:#EAF6FF; border:3px solid var(--grn); box-shadow:0 0 12px -2px rgba(18,185,129,.9); }
+input[type=range].av-range::-moz-range-track{ height:8px; border-radius:99px; background:#14293E; }
+input[type=range].av-range::-moz-range-progress{ height:8px; border-radius:99px; background:linear-gradient(90deg,var(--grn),var(--cyn)); }
+input[type=range].av-range::-moz-range-thumb{ width:18px; height:18px; border-radius:99px; background:#EAF6FF; border:3px solid var(--grn); }
+
+nav{ height:78px; display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding:8px 12px;
+  border-top:1px solid var(--line); background:linear-gradient(180deg,rgba(16,29,45,.95),rgba(10,20,32,.98)); }
+.nav-btn{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+  border-radius:12px; border:1px solid transparent; background:none; cursor:pointer; color:var(--mut);
+  font-family:inherit; font-size:12px; font-weight:700; transition:.15s; }
+.nav-btn svg{ width:22px; height:22px; }
+.nav-btn:hover{ color:var(--txt); background:rgba(34,64,92,.3); }
+.nav-btn.on{ color:#C9F5E6; background:linear-gradient(180deg,rgba(18,185,129,.15),rgba(34,211,238,.05)); border-color:rgba(18,185,129,.4); }
+.nav-btn.on svg{ color:var(--grn); }
+.log{ font-family:"JetBrains Mono",monospace; font-size:11px; color:var(--dim); line-height:1.7;
+  max-height:150px; overflow:auto; scrollbar-width:thin; scrollbar-color:var(--grn) var(--bg0); }
+.log::-webkit-scrollbar{ width:8px; }
+.log::-webkit-scrollbar-track{ background:var(--bg0); border-radius:99px; }
+.log::-webkit-scrollbar-thumb{ background:linear-gradient(180deg,var(--grn),var(--cyn)); border-radius:99px; }
+</style>
+</head>
+<body>
+
+<svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
+  <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h4.8v-5.2h3.4V20h4.8v-9.5"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2.5"/><path d="M16 10.5l5-3v9l-5-3"/></symbol>
+  <symbol id="i-audio" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.6l4.9 4V5.5l-4.9 4H4z"/><path d="M16 8.8a4.6 4.6 0 0 1 0 6.4"/><path d="M18.7 6.2a8.4 8.4 0 0 1 0 11.6"/></symbol>
+</svg>
+
+<div id="viewport">
+<div id="stage" data-panel-root>
+
+  <header data-chrome>
+    <span class="logo">AV</span>
+    <div><div class="h-title">Учебный класс 02.225</div><div class="h-sub">Эталон компонентов · analog states</div></div>
+    <span class="chip"><span class="dot"></span>Контроллер · онлайн</span>
+    <span class="clock" id="clock">12:47</span>
+  </header>
+
+  <main id="screens">
+
+    <section class="screen is-active" id="screen-home" data-screen="home">
+      <h1>Кнопки с множеством состояний</h1>
+      <div class="grid3" style="flex:1">
+        <div class="card">
+          <h3>Источник · 3 состояния</h3>
+          <p>Аналоговый join 61: индекс состояния управляет подписью, цветом и SVG-иконкой.</p>
+          <button class="av-btn" data-cmd-join="61" data-cmd-mode="cycle" data-state-join="61" data-state-type="analog" data-state-index="0"
+            data-states='[{"label":"Нет сигнала","color":"#5D7690","bg":"rgba(93,118,144,.10)","svg":"<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\"><rect x=\"3\" y=\"4\" width=\"18\" height=\"12.5\" rx=\"2\"/><path d=\"M8 20h8M12 16.5V20\"/><path d=\"M4 4l16 12.5\"/></svg>"},{"label":"Ноутбук HDMI","color":"#3E8BFF","bg":"rgba(62,139,255,.12)","svg":"<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"5\" y=\"5\" width=\"14\" height=\"9.5\" rx=\"1.5\"/><path d=\"M3 18.5h18l-1.6-3H4.6L3 18.5z\"/></svg>"},{"label":"Камера зала","color":"#12B981","bg":"rgba(18,185,129,.12)","svg":"<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"6\" width=\"13\" height=\"12\" rx=\"2.5\"/><path d=\"M16 10.5l5-3v9l-5-3\"/></svg>"}]'>
+            <span class="av-ico" data-role="icon"></span><span class="av-label" data-role="label">Нет сигнала</span>
+          </button>
+        </div>
+
+        <div class="card">
+          <h3>Режим зала · 4 состояния</h3>
+          <p>Тот же компонент, другой набор состояний. Копируется текстом целиком.</p>
+          <button class="av-btn" data-cmd-join="71" data-cmd-mode="cycle" data-state-join="71" data-state-type="analog" data-state-index="1"
+            data-states='[{"label":"Выключено","color":"#5D7690","bg":"rgba(93,118,144,.10)","svg":"<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\"><path d=\"M12 3v9\"/><path d=\"M6.3 6.6a8 8 0 1 0 11.4 0\"/></svg>"},{"label":"Лекция","color":"#12B981","bg":"rgba(18,185,129,.12)","svg":"<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"9\" y=\"3\" width=\"6\" height=\"11\" rx=\"3\"/><path d=\"M5.5 11a6.5 6.5 0 0 0 13 0\"/><path d=\"M12 17.5V21M8.5 21h7\"/></svg>"},{"label":"ВКС","color":"#22D3EE","bg":"rgba(34,211,238,.12)","svg":"<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"6\" width=\"13\" height=\"12\" rx=\"2.5\"/><path d=\"M16 10.5l5-3v9l-5-3\"/></svg>"},{"label":"Кино","color":"#8B5CF6","bg":"rgba(139,92,246,.12)","svg":"<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/><path d=\"M7 5v14M17 5v14M3 12h18\"/></svg>"}]'>
+            <span class="av-ico" data-role="icon"></span><span class="av-label" data-role="label">Лекция</span>
+          </button>
+        </div>
+
+        <div class="card">
+          <h3>Растровая иконка · 2 состояния</h3>
+          <p>Картинка состояния — data-URI. Загружается кнопкой «PNG/JPG» во вкладке «Состояния».</p>
+          <button class="av-btn" data-cmd-join="81" data-cmd-mode="cycle" data-state-join="81" data-state-type="analog" data-state-index="0"
+            data-states='[{"label":"Проектор выключен","color":"#F5A623","bg":"rgba(245,166,35,.10)","img":"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRjVBNjIzIiBzdHJva2Utd2lkdGg9IjEuOCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIj48cmVjdCB4PSIyIiB5PSI3IiB3aWR0aD0iMjAiIGhlaWdodD0iMTAiIHJ4PSIyIi8+PGNpcmNsZSBjeD0iOSIgY3k9IjEyIiByPSIzIi8+PHBhdGggZD0iTTE3IDEwaC4wMU02IDE5djJNMTggMTl2MiIvPjwvc3ZnPg=="},{"label":"Проектор включён","color":"#22C55E","bg":"rgba(34,197,94,.12)","img":"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMjJDNTVFIiBzdHJva2Utd2lkdGg9IjEuOCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIj48cmVjdCB4PSIyIiB5PSI3IiB3aWR0aD0iMjAiIGhlaWdodD0iMTAiIHJ4PSIyIi8+PGNpcmNsZSBjeD0iOSIgY3k9IjEyIiByPSIzIiBmaWxsPSIjMjJDNTVFIiBmaWxsLW9wYWNpdHk9Ii4zIi8+PHBhdGggZD0iTTE3IDEwaC4wMU02IDE5djJNMTggMTl2Mk0yMCA0bC0yIDJNNCA0bDIgMiIvPjwvc3ZnPg=="}]'>
+            <span class="av-ico" data-role="icon"></span><span class="av-label" data-role="label">Проектор выключен</span>
+          </button>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h3>Как это работает</h3>
+        <p style="margin:0">Клик по кнопке шлёт <code>sendControlSignal('analog', join, индекс)</code>. Ответ контроллера — <code>AVStates.rx(join, индекс)</code>. Состояния хранятся в <code>data-states</code> обычным JSON, поэтому компонент копируется одной строкой текста и вставляется в любую панель.</p>
+      </div>
+    </section>
+
+    <section class="screen" id="screen-video" data-screen="video">
+      <h1>Коммутация</h1>
+      <div class="grid2" style="flex:1">
+        <div class="card">
+          <h3>Выходы</h3>
+          <p>Компактный вариант того же компонента — состояния и картинки те же по контракту.</p>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <button class="av-btn compact" data-cmd-join="91" data-cmd-mode="cycle" data-state-join="91" data-state-type="analog" data-state-index="0"
+              data-states='[{"label":"Дисплей · пусто","color":"#5D7690"},{"label":"Дисплей · Ноутбук","color":"#3E8BFF"},{"label":"Дисплей · Камера","color":"#12B981"}]'>
+              <span class="av-ico" data-role="icon"></span><span class="av-label" data-role="label">Дисплей · пусто</span>
+            </button>
+            <button class="av-btn compact" data-cmd-join="101" data-cmd-mode="cycle" data-state-join="101" data-state-type="analog" data-state-index="2"
+              data-states='[{"label":"Кодек · пусто","color":"#5D7690"},{"label":"Кодек · Ноутбук","color":"#3E8BFF"},{"label":"Кодек · Камера 2","color":"#F5A623"}]'>
+              <span class="av-ico" data-role="icon"></span><span class="av-label" data-role="label">Кодек · Камера 2</span>
+            </button>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Журнал сигналов</h3>
+          <p>Каждое действие уходит в консоль и в этот журнал.</p>
+          <div class="log" id="log"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" id="screen-audio" data-screen="audio">
+      <h1>Звук</h1>
+      <div class="card" style="flex:1;display:flex;flex-direction:column;gap:16px;justify-content:center">
+        <div class="row"><span class="lbl">Громкоговорители зала</span><input type="range" class="av-range" min="0" max="100" value="65" data-analog-join="20"><span class="val" data-text-join="20">65</span></div>
+        <div class="row"><span class="lbl">Микрофон кафедры</span><input type="range" class="av-range" min="0" max="100" value="70" data-analog-join="10"><span class="val" data-text-join="10">70</span></div>
+        <div class="row"><span class="lbl">Посыл в ВКС</span><input type="range" class="av-range" min="0" max="100" value="75" data-analog-join="21"><span class="val" data-text-join="21">75</span></div>
+      </div>
+    </section>
+
+  </main>
+
+  <nav data-chrome>
+    <button class="nav-btn on" data-nav="home"><svg><use href="#i-home"/></svg>Главная</button>
+    <button class="nav-btn" data-nav="page:video"><svg><use href="#i-video"/></svg>Видео</button>
+    <button class="nav-btn" data-nav="page:audio"><svg><use href="#i-audio"/></svg>Звук</button>
+  </nav>
+
+</div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var logBox = document.getElementById('log');
+  function logLine(t) {
+    if (!logBox) return;
+    var d = document.createElement('div');
+    d.textContent = new Date().toLocaleTimeString('ru-RU') + '  ' + t;
+    logBox.prepend(d);
+    while (logBox.children.length > 40) logBox.lastChild.remove();
+  }
+  window.sendControlSignal = function (type, join, value) {
+    console.log('[AV → CTRL]', type, '#' + join, '=', value);
+    logLine('↗ ' + type + ' #' + join + ' = ' + value);
+  };
+  window.receiveControlSignal = function (type, join, value) {
+    console.log('[CTRL → AV]', type, '#' + join, '=', value);
+    logLine('↘ ' + type + ' #' + join + ' = ' + value);
+    if (type === 'analog' && window.AVStates) window.AVStates.rx(join, value);
+    document.querySelectorAll('[data-text-join="' + join + '"]').forEach(function (n) { n.textContent = value; });
+    document.querySelectorAll('[data-analog-join="' + join + '"]').forEach(function (n) {
+      n.value = value; n.style.setProperty('--p', value + '%');
+    });
+  };
+
+  function fit() {
+    var s = document.getElementById('stage');
+    if (s) s.style.transform = 'scale(' + Math.min(innerWidth / 1280, innerHeight / 720) + ')';
+  }
+  addEventListener('resize', fit); fit();
+
+  document.addEventListener('input', function (e) {
+    var r = e.target.closest('[data-analog-join]');
+    if (!r) return;
+    var v = +r.value, j = +r.getAttribute('data-analog-join');
+    r.style.setProperty('--p', v + '%');
+    document.querySelectorAll('[data-text-join="' + j + '"]').forEach(function (n) { n.textContent = v; });
+    window.sendControlSignal('analog', j, v);
+  });
+
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-nav]');
+    if (!b) return;
+    var v = b.getAttribute('data-nav');
+    var id = v === 'home' ? 'screen-home' : 'screen-' + v.split(':')[1];
+    document.querySelectorAll('.screen').forEach(function (s) { s.classList.toggle('is-active', s.id === id); });
+    document.querySelectorAll('.nav-btn').forEach(function (n) { n.classList.toggle('on', n === b); });
+    if (window.AVStates) window.AVStates.refresh();
+  });
+
+  function tick() {
+    var d = new Date(), c = document.getElementById('clock');
+    if (c) c.textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+  var timer = setInterval(tick, 1000); tick();
+
+  document.querySelectorAll('[data-analog-join]').forEach(function (r) { r.style.setProperty('--p', r.value + '%'); });
+
+  window.AVPanel = {
+    destroy: function () { clearInterval(timer); },
+    rebind: function () {
+      document.querySelectorAll('[data-analog-join]').forEach(function (r) { r.style.setProperty('--p', r.value + '%'); });
+      fit();
+    }
+  };
+})();
+</script>
+<script src="panel-editor.js" id="pe-script"></script>
+</body>
+</html>

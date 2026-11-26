@@ -1,0 +1,17 @@
+# Проприетарные библиотеки и сборки Crestron
+*cr-com-lib*.js
+*webxpanel*.js
+*.ch5z
+
+# Временные файлы и архивы
+*.zip
+*.bak
+*.tmp
+
+# Системный мусор и настройки редакторов
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+node_modules/
