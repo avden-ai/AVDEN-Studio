@@ -3,7 +3,7 @@
 **Открытый, вендоронезависимый HTML-first фреймворк и визуальный WYSIWYG-редактор для создания сенсорных интерфейсов управления AV-оборудованием (Node-RED, Crestron, Q-SYS, AMX).**
 
 > **Проект:** AVDEN-Studio · **Автор и создатель архитектуры:** Вяхирев Алексей Алексеевич (Alexey A. Vyakhirev) · 2026
-
+<img width="1914" height="954" alt="preview" src="https://github.com/user-attachments/assets/4c91e235-7080-4bdb-810b-bd0de3456ccb" />
 ---
 
 ## Философия и ключевые особенности
