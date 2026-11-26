@@ -1,9 +1,9 @@
 # AVDEN-Studio (AV-CORE & Panel Editor)
 
-**Открытый, вендоронезависимый HTML-first фреймворк и визуальный WYSIWYG-редактор для создания сенсорных интерфейсов управления AV-оборудованием (Node-RED, Crestron, Q-SYS, AMX).**
+**Открытый, вендоронезависимый HTML-first фреймворк и визуальный WYSIWYG-редактор для создания сенсорных интерфейсов управления AV-оборудованием (Node-RED, Wiren Board, Crestron, Q-SYS, AMX).**
 
 > **Проект:** AVDEN-Studio · **Автор и создатель архитектуры:** Вяхирев Алексей Алексеевич (Alexey A. Vyakhirev) · 2026
-<img width="1914" height="954" alt="preview" src="https://github.com/user-attachments/assets/4c91e235-7080-4bdb-810b-bd0de3456ccb" />
+
 ---
 
 ## Философия и ключевые особенности
@@ -224,6 +224,6 @@
 
 По вопросам коммерческого лицензирования, передачи прав и кастомизации обращайтесь напрямую к автору:
 * **Правообладатель:** Вяхирев Алексей Алексеевич (Alexey A. Vyakhirev)
-* **GitHub:** [@avden-ai](https://github.com)
+* **GitHub:** [avden-ai/AVDEN-Studio](https://github.com/avden-ai/AVDEN-Studio)
 * **Контакт для связи:** aav7ivv@gmail.com
 
