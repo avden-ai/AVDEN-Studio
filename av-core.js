@@ -1,5 +1,5 @@
 /* =====================================================================================
-   AVDEN-Studio · AV-CORE · v3.0 «Dual Transport»
+   AVDEN-Studio · AV-CORE · v3.0.0.2 «Dual Transport»
    Controller-First Runtime для AV-панелей · сменные транспорты · декларативный DOM
 
    Copyright 2026 Вяхирев Алексей Алексеевич (Alexey A. Vyakhirev)
@@ -26,6 +26,10 @@
    • Panel.setJoinMap(obj) / joinMap() — таблица соответствия имён и числовых join-ов
    • Panel.rebuild() / fit()          — перепривязка DOM и масштабирование сцены
    • Panel.diagnostics() / stats()    — диагностика привязок и состояния моста
+
+   1. Исправлено - увод курсора мыши с кнопки без выдачи joun = 0
+   2. Появление меню при удержании пальца на сенсорных экранах
+
    ===================================================================================== */
 
 
@@ -906,6 +910,10 @@
       function down(e) {
         if (e && e.type === 'pointerdown' && e.button !== 0) return;
         if (el.disabled) return;
+
+        if (e && e.pointerId != null && el.setPointerCapture) {
+          try { el.setPointerCapture(e.pointerId); } catch (err) {}
+        }
         el.classList.add('is-pressed');
         holdFired = false;
         playFeedbackSound('tick');
@@ -931,7 +939,18 @@
           sendControlSignal('string', t, ch);
         }
       }
-      function up() {
+
+
+      function up(e) {
+        // 2. Освобождаем захват указателя
+        if (e && e.pointerId != null && el.releasePointerCapture) {
+          try {
+            if (el.hasPointerCapture && el.hasPointerCapture(e.pointerId)) {
+              el.releasePointerCapture(e.pointerId);
+            }
+          } catch (err) {}
+        }
+
         if (!el.classList.contains('is-pressed')) return;
         el.classList.remove('is-pressed', 'is-holding');
         if (saveJoin) {
@@ -944,6 +963,8 @@
         }
         if (digJoin && !isLatch && !el.hasAttribute('data-states')) sendControlSignal('digital', digJoin, 0);
       }
+
+
       el.addEventListener('pointerdown', down);
       el.addEventListener('pointerup', up);
       el.addEventListener('pointercancel', up);
@@ -1464,12 +1485,31 @@
   window.AVPanel = { rebind: rebuild };
 
   /* ===================== INIT ===================== */
+
+
   function init() {
     loadConfigFromMarkup();
     fitStage();
     rebuild();
     applyInitialView();
     startLocalClock();
+
+    var stage = stageRoot() || document;
+    stage.addEventListener('contextmenu', function (e) {
+      if (document.body.classList.contains('pe-editing') || isEditorNode(e.target)) return;
+      if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+      e.preventDefault();
+    });
+
+    if (!document.getElementById('av-touch-guard')) {
+      var st = document.createElement('style');
+      st.id = 'av-touch-guard';
+      st.textContent =
+        'body:not(.pe-editing) [data-panel-root], body:not(.pe-editing) #panel-stage { touch-action: none; -webkit-touch-callout: none; }' +
+        'body:not(.pe-editing) [data-list-join], body:not(.pe-editing) #book-list, body:not(.pe-editing) #jb-log { touch-action: pan-y; }';
+      document.head.appendChild(st);
+    }
+
     window.addEventListener('resize', function () { fitStage(); updateVerticalSliders(); });
     window.addEventListener('orientationchange', fitStage);
     useTransport('auto');
@@ -1488,6 +1528,7 @@
     console.log('[AV-CORE] v' + CORE_VERSION + ' · режим:', state.transport,
       '· join-привязок:', bindings().length, '· карта:', Object.keys(joinMap).length);
   }
+
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
