@@ -1,5 +1,5 @@
 /* =====================================================================================
-   AVDEN-Studio · AV-CORE · v3.0.0.2 «Dual Transport»
+   AVDEN-Studio · AV-CORE · v3.1 «Dual Transport»
    Controller-First Runtime для AV-панелей · сменные транспорты · декларативный DOM
 
    Copyright 2026 Вяхирев Алексей Алексеевич (Alexey A. Vyakhirev)
@@ -39,7 +39,7 @@
   window.__avCoreLoaded = true;
 
   /* ===================== КОНФИГУРАЦИЯ И СОСТОЯНИЕ ===================== */
-  var CORE_VERSION = '3.0';
+  var CORE_VERSION = '3.1';
   var DEFAULT_WS = 'ws://192.168.1.49:1880/socket';
   var ACTIVE_TOKENS = ['is-active', 'active', 'is-open', 'open', 'visible', 'is-visible', 'show', 'shown'];
   var DEFAULT_LIST_COLORS = ['#2DD4BF', '#38BDF8', '#E879F9', '#FBBF24', '#34D399', '#A78BFA', '#F97316'];
@@ -284,6 +284,12 @@
   }
 
   function sendControlSignal(type, join, value, extra) {
+
+  if (type && typeof type === 'object') {
+    var m = type;
+    var v = m.value !== undefined ? m.value : (m.val !== undefined ? m.val : m.text);
+    return sendControlSignal(m.type, m.join, v, m.ts ? { ts: m.ts } : null);
+  }
     var jStr = normJoin(join);
     if (!jStr) return;
     var msg = Object.assign({ type: String(type), join: formatJoinOut(join), value: value, ts: Date.now() }, extra || {});
@@ -579,6 +585,7 @@
       el.classList.toggle('is-active', on);
       if (el.hasAttribute('aria-pressed')) el.setAttribute('aria-pressed', on ? 'true' : 'false');
       if (el.hasAttribute('aria-checked')) el.setAttribute('aria-checked', on ? 'true' : 'false');
+      if (on && el.hasAttribute('data-radio-group') && window.AVRadio) window.AVRadio.apply(el);
       var iOn = el.getAttribute('data-icon-on'), iOff = el.getAttribute('data-icon-off');
       if (iOn || iOff) {
         var use = el.querySelector('use'), target = on ? iOn : iOff;
@@ -593,12 +600,19 @@
     document.querySelectorAll('[data-mute-join]').forEach(function (ch) {
       if (!isEditorNode(ch) && normJoin(ch.getAttribute('data-mute-join')) === j) ch.classList.toggle('is-muted', on);
     });
-    document.querySelectorAll('[data-visibility]').forEach(function (blk) {
-      if (isEditorNode(blk) || getDigitalJoin(blk) !== j) return;
-      var mode = blk.getAttribute('data-visibility');
-      blk.classList.toggle('hidden', !on);
-      if (mode && mode !== 'block' && mode !== '1') blk.classList.toggle(mode, on);
-    });
+
+
+  document.querySelectorAll('[data-visibility],[data-visibility-join]').forEach(function (blk) {
+    if (isEditorNode(blk)) return;
+    var vj = normJoin(blk.getAttribute('data-visibility-join'));
+    if (vj ? vj !== j : getDigitalJoin(blk) !== j) return;
+    var mode = blk.getAttribute('data-visibility');
+    blk.classList.toggle('hidden', !on);
+    blk.toggleAttribute('data-vis-hidden', !on);
+    if (mode && mode !== 'block' && mode !== '1' && mode !== 'true') blk.classList.toggle(mode, on);
+  });
+
+
     document.querySelectorAll('[data-power-for]').forEach(function (el) {
       if (!isEditorNode(el) && normJoin(el.getAttribute('data-power-for')) === j) el.classList.toggle('is-off', !on);
     });
@@ -1484,11 +1498,314 @@
   };
   window.AVPanel = { rebind: rebuild };
 
+
+/* ===================== ВСТРОЕННЫЕ РАНТАЙМЫ UI (v3.1) =====================
+   Всё, что раньше инжектил panel-editor.js, теперь часть ядра:
+   AVStates · AVTextLock · AVScreens · AVVisibility · AVRadio · AVStepRepeat.
+   Панель самодостаточна сразу после генерации LLM. Редактор только рисует UI.
+   Логика на делегировании document → любой скопированный/вставленный узел
+   работает мгновенно, без перепривязки.
+========================================================================= */
+
+function rtSvg(s) {
+  var str = String(s == null ? '' : s);
+  str = str.replace(/<\s*script[\s\S]*?<\s*\/\s*script\s*>/gi, '');
+  str = str.replace(/\son[a-z]+\s*=\s*"[^"]*"/gi, '').replace(/\son[a-z]+\s*=\s*'[^']*'/gi, '');
+  str = str.replace(/(href|xlink:href)\s*=\s*(['"])\s*javascript:[^'"]*\2/gi, '$1=$2#$2');
+  return str;
+}
+function rtAll(sel, root) {
+  return Array.prototype.filter.call((root || document).querySelectorAll(sel), function (el) {
+    return !isEditorNode(el);
+  });
+}
+/* локальный отклик разрешён: эхо, mock, офлайн или явный data-local */
+function rtLocal(el) {
+  return (el && el.hasAttribute('data-local')) || state.echo || state.transport === 'mock' || !state.online;
+}
+
+/* ---------- многосостоянийные кнопки ---------- */
+function rtInstallStates() {
+  if (window.AVStates) return;
+  function token(v) { return isNum(v) ? +v : String(v); }
+  function statesOf(el) { try { return JSON.parse(el.getAttribute('data-states') || '[]'); } catch (e) { return []; } }
+  function apply(el, idx) {
+    if (!el || el.nodeType !== 1) return;
+    var list = statesOf(el); if (!list.length) return;
+    idx = Math.max(0, Math.min(list.length - 1, idx | 0));
+    var st = list[idx] || {};
+    el.setAttribute('data-state-index', String(idx));
+    var lab = el.querySelector('[data-role="label"]');
+    if (lab && st.label != null && !isLockedText(lab)) lab.textContent = st.label;
+    var ico = el.querySelector('[data-role="icon"]');
+    if (ico) {
+      if (st.svg) ico.innerHTML = rtSvg(st.svg);
+      else if (st.img) ico.innerHTML = '<img alt="" src="' + escapeHtml(st.img) + '">';
+      else ico.innerHTML = '';
+      var ch = ico.firstElementChild;
+      if (ch) { ch.style.width = '100%'; ch.style.height = '100%'; ch.style.display = 'block'; ch.style.objectFit = 'contain'; }
+    }
+    if (st.color) el.style.setProperty('--st-c', st.color);
+    if (st.bg) el.style.setProperty('--st-bg', st.bg);
+    el.setAttribute('aria-pressed', idx > 0 ? 'true' : 'false');
+  }
+  function each(fn) { rtAll('[data-states]').forEach(fn); }
+  window.AVStates = {
+    apply: apply, states: statesOf, token: token,
+    refresh: function () { each(function (el) { apply(el, +(el.getAttribute('data-state-index') || 0)); }); },
+    bind: function () { this.refresh(); },
+    rx: function (join, value) {
+      var key = normJoin(join);
+      each(function (el) {
+        if (normJoin(el.getAttribute('data-state-join') || el.getAttribute('data-cmd-join')) === key) apply(el, value);
+      });
+    }
+  };
+  document.addEventListener('click', function (e) {
+    if (document.body.classList.contains('pe-editing')) return;
+    var el = e.target.closest && e.target.closest('[data-states]');
+    if (!el || isEditorNode(el) || el.hasAttribute('data-static')) return;
+    var list = statesOf(el); if (!list.length) return;
+    var cur = +(el.getAttribute('data-state-index') || 0);
+    var next = el.getAttribute('data-cmd-mode') === 'set'
+      ? parseInt(el.getAttribute('data-cmd-value') || '0', 10)
+      : (cur + 1) % list.length;
+    if (rtLocal(el)) apply(el, next);
+    var j = el.getAttribute('data-state-join') || el.getAttribute('data-cmd-join');
+    if (j) sendControlSignal('analog', token(j), next);
+  });
+  new MutationObserver(function (recs) {
+    recs.forEach(function (r) {
+      Array.prototype.forEach.call(r.addedNodes || [], function (n) {
+        if (n.nodeType !== 1) return;
+        if (n.hasAttribute('data-states')) apply(n, +(n.getAttribute('data-state-index') || 0));
+        if (n.querySelectorAll) n.querySelectorAll('[data-states]').forEach(function (x) {
+          apply(x, +(x.getAttribute('data-state-index') || 0));
+        });
+      });
+    });
+  }).observe(document.documentElement, { childList: true, subtree: true });
+}
+
+/* ---------- защита статических надписей ---------- */
+function rtInstallTextLock() {
+  if (window.AVTextLock) return;
+  var ATTR = 'data-text-lock', writing = false;
+  function guarded(el) {
+    if (!el || el.nodeType !== 1 || el.children.length) return false;
+    if (el.hasAttribute('data-text-join') || el.hasAttribute('data-join-string')) return false;
+    if (el.closest('[data-text-join]') || el.closest('[data-join-string]')) return false;
+    return true;
+  }
+  function apply(el) {
+    if (!guarded(el)) return;
+    var want = el.getAttribute(ATTR);
+    if (want == null || el.textContent === want) return;
+    writing = true; el.textContent = want; writing = false;
+  }
+  function all(root) {
+    var out = [];
+    if (!root) return out;
+    if (root.nodeType === 1 && root.hasAttribute && root.hasAttribute(ATTR)) out.push(root);
+    if (root.querySelectorAll) out = out.concat(Array.prototype.slice.call(root.querySelectorAll('[' + ATTR + ']')));
+    return out;
+  }
+  function refresh() { all(document.documentElement).forEach(apply); }
+  window.AVTextLock = {
+    attr: ATTR, refresh: refresh, guarded: guarded,
+    set: function (el, text) { if (!guarded(el)) return false; el.setAttribute(ATTR, String(text)); apply(el); return true; },
+    release: function (el) { if (el && el.removeAttribute) el.removeAttribute(ATTR); },
+    list: function () { return all(document.documentElement); }
+  };
+  refresh();
+  new MutationObserver(function (recs) {
+    if (writing) return;
+    recs.forEach(function (r) {
+      if (r.type === 'attributes') { apply(r.target); return; }
+      if (r.type === 'characterData') {
+        var p = r.target.parentElement;
+        if (p && p.hasAttribute && p.hasAttribute(ATTR)) apply(p);
+        return;
+      }
+      if (r.target && r.target.nodeType === 1 && r.target.hasAttribute && r.target.hasAttribute(ATTR)) apply(r.target);
+      Array.prototype.forEach.call(r.addedNodes || [], function (n) { all(n).forEach(apply); });
+    });
+  }).observe(document.documentElement, {
+    childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: [ATTR]
+  });
+}
+
+/* ---------- видимость: data-visibility-join + data-visibility ---------- */
+function rtInstallVisibility() {
+  if (window.AVVisibility) return;
+  function apply(el, val) {
+    if (!el || el.nodeType !== 1) return;
+    var show = toBool(val);
+    el.classList.toggle('hidden', !show);
+    el.toggleAttribute('data-vis-hidden', !show);
+    var mode = el.getAttribute('data-visibility');
+    if (mode && mode !== 'block' && mode !== '1' && mode !== 'true') el.classList.toggle(mode, show);
+  }
+  function rx(join, value) {
+    var key = normJoin(join);
+    rtAll('[data-visibility-join]').forEach(function (el) {
+      if (normJoin(el.getAttribute('data-visibility-join')) === key) apply(el, value);
+    });
+  }
+  window.AVVisibility = { apply: apply, rx: rx };
+}
+
+/* ---------- радио-группы ---------- */
+function rtInstallRadio() {
+  if (window.AVRadio) return;
+  function members(name, scope) {
+    return rtAll('[data-radio-group]', scope).filter(function (el) {
+      return el.getAttribute('data-radio-group') === name;
+    });
+  }
+  function setActive(el, on) {
+    el.classList.toggle('is-active', on);
+    if (!on) {
+      var j = getDigitalJoin(el);
+      if (j && state.digital[j]) state.digital[j] = 0;
+    }
+    if (el.hasAttribute('data-nav') || /\b(av-nav-item|av-seg-btn|av-tab)\b/.test(el.className || '')) {
+      el.classList.toggle('is-current', on);
+    }
+    if (el.hasAttribute('aria-pressed')) el.setAttribute('aria-pressed', on ? 'true' : 'false');
+    if (el.hasAttribute('aria-checked') || el.getAttribute('role') === 'radio') {
+      el.setAttribute('aria-checked', on ? 'true' : 'false');
+    }
+  }
+
+  function apply(el) {
+    var name = el && el.getAttribute('data-radio-group');
+    if (!name) return;
+    var scope = el.closest('[data-radio-scope]') ||
+            el.closest('[data-screen],[data-dialog],.av-page,.av-modal') || document;
+    members(name, scope).forEach(function (m) { setActive(m, m === el); });
+  }
+  window.AVRadio = { apply: apply, members: members, setActive: setActive };
+  document.addEventListener('click', function (e) {
+    if (document.body.classList.contains('pe-editing')) return;
+    var el = e.target.closest && e.target.closest('[data-radio-group]');
+    if (!el || isEditorNode(el)) return;
+    if (el.hasAttribute('data-radio-local') || rtLocal(el)) apply(el);
+  });
+}
+
+/* ---------- автоповтор шага (.av-step / data-repeat) ---------- */
+function rtInstallStepRepeat() {
+  if (window.AVStepRepeat) return;
+  window.AVStepRepeat = true;
+  var timer = null, interval = null, btn = null, lastX = 0, lastY = 0, pulseMs = 60;
+  function stop() { clearTimeout(timer); clearInterval(interval); timer = interval = null; btn = null; }
+  function inside(el, x, y) {
+    var r = el.getBoundingClientRect(), t = 12;
+    return x >= r.left - t && x <= r.right + t && y >= r.top - t && y <= r.bottom + t;
+  }
+  function tick() {
+    if (!btn || !btn.isConnected || btn.disabled || document.body.classList.contains('pe-editing')) { stop(); return; }
+    if (!inside(btn, lastX, lastY)) { stop(); return; }
+    var j = getDigitalJoin(btn);
+    var hasStates = btn.hasAttribute('data-states');
+    if (j && !hasStates && !btn.hasAttribute('data-latch')) {
+      sendControlSignal('digital', j, 1);
+      setTimeout(function () { sendControlSignal('digital', j, 0); }, pulseMs);
+    }
+    if (!hasStates) playFeedbackSound('tick');
+    try { btn.click(); } catch (e) {}
+  }
+  document.addEventListener('pointerdown', function (e) {
+    if (document.body.classList.contains('pe-editing')) return;
+    if (e.button != null && e.button !== 0) return;
+    var el = e.target.closest && e.target.closest('.av-step,[data-repeat]');
+    if (!el || isEditorNode(el) || el.getAttribute('data-repeat') === 'off') return;
+    stop();
+    btn = el; lastX = e.clientX; lastY = e.clientY;
+    var delay = parseInt(el.getAttribute('data-repeat-delay'), 10); if (!(delay >= 0)) delay = 450;
+    var rate = parseInt(el.getAttribute('data-repeat-rate'), 10); if (!(rate > 0)) rate = 140;
+    pulseMs = Math.max(20, Math.min(60, Math.floor(rate / 2)));
+    timer = setTimeout(function () { interval = setInterval(tick, rate); }, delay);
+  });
+  document.addEventListener('pointermove', function (e) { if (btn) { lastX = e.clientX; lastY = e.clientY; } });
+  ['pointerup', 'pointercancel', 'blur'].forEach(function (ev) { window.addEventListener(ev, stop); });
+  document.addEventListener('visibilitychange', stop);
+}
+
+
+/* ---------- реестр экранов (совместимость с API редактора) ---------- */
+function rtInstallScreens() {
+  if (window.AVScreens) return;
+  var PAGE = '[data-screen],.av-page,.screen,.page,[id^="screen-"],[id^="page-"],[id^="subpage-"]';
+  var DLG = '[data-dialog],.av-modal,.overlay,.modal,.dialog,[id^="overlay-"],[id^="modal-"],[id^="dialog-"],#shutdown-overlay';
+  var SAVER = '[data-screensaver],#splash,#screensaver';
+  function nodes() { return rtAll(PAGE + ',' + DLG + ',' + SAVER); }
+  function kind(n) {
+    if (!n) return 'page';
+    if (n.matches(SAVER) || /screensaver|saver|standby|idle|splash/i.test(n.id || '')) return 'saver';
+    return n.matches(PAGE) ? 'page' : 'dialog';
+  }
+  function on(n) {
+    if (kind(n) === 'saver') return !n.classList.contains('is-hidden');
+    var cls = String(n.getAttribute('class') || '').split(/\s+/);
+    return ACTIVE_TOKENS.some(function (t) { return cls.indexOf(t) >= 0; });
+  }
+  function byId(x) {
+    if (!x) return null;
+    if (typeof x !== 'string') return x;
+    return document.getElementById(x) || document.querySelector('[data-screen="' + x + '"],[data-dialog="' + x + '"]');
+  }
+  window.AVScreens = {
+    list: function () { return nodes().map(function (n) { return { id: n.id || '', kind: kind(n), active: on(n), el: n }; }); },
+    kind: function (x) { return kind(byId(x)); },
+    active: function () {
+      var l = nodes().filter(on);
+      var d = l.filter(function (n) { return kind(n) === 'dialog'; });
+      if (d.length) return d[d.length - 1];
+      var p = l.filter(function (n) { return kind(n) === 'page'; });
+      return p[p.length - 1] || l[l.length - 1] || null;
+    },
+    show: function (x) {
+      var el = byId(x); if (!el) return false;
+      var k = kind(el);
+      if (k === 'page') activatePageElement(el, true, true);
+      else if (k === 'dialog') openDialogElement(el, true);
+      else wakePanel();
+      return true;
+    },
+    open: function (x) { return this.show(x); },
+    close: function (x) { var el = byId(x); if (!el) return false; closeDialogElement(el, false); return true; },
+    refresh: function () {
+      if (window.AVStates) window.AVStates.refresh();
+      if (window.AVTextLock) window.AVTextLock.refresh();
+    }
+  };
+}
+
+/* ставим сразу, не дожидаясь DOMContentLoaded:
+   редактор и LLM-разметка могут обратиться к API раньше init() */
+rtInstallStates();
+rtInstallTextLock();
+rtInstallVisibility();
+rtInstallRadio();
+rtInstallStepRepeat();
+rtInstallScreens();
+
+function refreshRuntime() {
+  if (window.AVStates) window.AVStates.refresh();
+  if (window.AVTextLock) window.AVTextLock.refresh();
+}
+
+
+
+
   /* ===================== INIT ===================== */
 
 
   function init() {
     loadConfigFromMarkup();
+    refreshRuntime();
     fitStage();
     rebuild();
     applyInitialView();

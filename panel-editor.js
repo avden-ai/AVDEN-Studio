@@ -26,234 +26,10 @@
 if (window.__panelEditorLoaded) return;
 window.__panelEditorLoaded = true;
 
-/* ===================== РАНТАЙМ СОСТОЯНИЙ (уходит в экспорт) ===================== */
-var RUNTIME_STATES = function () {
-  if (window.AVStates) return;
-  function token(v) { return /^\d+$/.test(String(v)) ? +v : String(v); }
-  function states(el) { try { return JSON.parse(el.getAttribute('data-states') || '[]'); } catch (e) { return []; } }
-  function apply(el, idx) {
-    var list = states(el); if (!list.length) return;
-    idx = Math.max(0, Math.min(list.length - 1, idx | 0));
-    var st = list[idx] || {};
-    el.setAttribute('data-state-index', String(idx));
-    var lab = el.querySelector('[data-role="label"]');
-    if (lab && st.label != null && !lab.hasAttribute('data-text-lock')) lab.textContent = st.label;
-var ico = el.querySelector('[data-role="icon"]');
-    if (ico) {
-      if (st.svg) ico.innerHTML = st.svg;
-      else if (st.img) ico.innerHTML = '<img alt="" src="' + st.img + '">';
-      else ico.innerHTML = '';
-      var ch = ico.firstElementChild;
-      if (ch) { ch.style.width = '100%'; ch.style.height = '100%'; ch.style.display = 'block'; ch.style.objectFit = 'contain'; }
-    }
-    if (st.color) el.style.setProperty('--st-c', st.color);
-    if (st.bg) el.style.setProperty('--st-bg', st.bg);
-    el.setAttribute('aria-pressed', idx > 0 ? 'true' : 'false');
-  }
-  function each(fn) { document.querySelectorAll('[data-states]').forEach(fn); }
-  window.AVStates = {
-    apply: apply, states: states, token: token,
-    refresh: function () { each(function (el) { apply(el, +(el.getAttribute('data-state-index') || 0)); }); },
-    rx: function (join, value) {
-      var key = String(join);
-      each(function (el) { if (String(el.getAttribute('data-state-join')) === key) apply(el, value); });
-    },
-    bind: function () { each(function (el) { apply(el, +(el.getAttribute('data-state-index') || 0)); }); }
-  };
-  document.addEventListener('click', function (e) {
-    var el = e.target.closest && e.target.closest('[data-states]');
-    if (!el || el.hasAttribute('data-static')) return;
-    var list = states(el); if (!list.length) return;
-    var cur = +(el.getAttribute('data-state-index') || 0);
-    var next = el.getAttribute('data-cmd-mode') === 'set'
-      ? parseInt(el.getAttribute('data-cmd-value') || '0', 10)
-      : (cur + 1) % list.length;
-    apply(el, next);
-    var j = el.getAttribute('data-state-join') || el.getAttribute('data-cmd-join');
-    if (j && typeof window.sendControlSignal === 'function') window.sendControlSignal('analog', token(j), next);
-  });
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { window.AVStates.bind(); });
-  else window.AVStates.bind();
-  new MutationObserver(function (m) {
-    m.forEach(function (r) {
-      r.addedNodes && r.addedNodes.forEach(function (n) {
-        if (n.nodeType !== 1) return;
-        if (n.hasAttribute && n.hasAttribute('data-states')) window.AVStates.apply(n, +(n.getAttribute('data-state-index') || 0));
-        n.querySelectorAll && n.querySelectorAll('[data-states]').forEach(function (x) { window.AVStates.apply(x, +(x.getAttribute('data-state-index') || 0)); });
-      });
-    });
-  }).observe(document.documentElement, { childList: true, subtree: true });
-};
-
-/* ===================== РАНТАЙМ ЗАЩИТЫ НАДПИСЕЙ (уходит в экспорт) ===================== */
-var RUNTIME_LOCK = function () {
-  if (window.AVTextLock) return;
-  var ATTR = 'data-text-lock';
-  var writing = false;
-  function guarded(el) {
-    if (!el || el.nodeType !== 1) return false;
-    if (el.children.length) return false;
-    if (el.hasAttribute('data-text-join') || el.hasAttribute('data-join-string')) return false;
-    if (el.closest && (el.closest('[data-text-join]') || el.closest('[data-join-string]'))) return false;
-    return true;
-  }
-  function apply(el) {
-    if (!guarded(el)) return;
-    var want = el.getAttribute(ATTR);
-    if (want == null) return;
-    if (el.textContent === want) return;
-    writing = true; el.textContent = want; writing = false;
-  }
-  function all(root) {
-    var out = [];
-    if (!root) return out;
-    if (root.nodeType === 1 && root.hasAttribute && root.hasAttribute(ATTR)) out.push(root);
-    if (root.querySelectorAll) out = out.concat(Array.from(root.querySelectorAll('[' + ATTR + ']')));
-    return out;
-  }
-  function refresh() { all(document.documentElement).forEach(apply); }
-  window.AVTextLock = {
-    attr: ATTR, refresh: refresh, guarded: guarded,
-    set: function (el, text) { if (!guarded(el)) return false; el.setAttribute(ATTR, String(text)); apply(el); return true; },
-    release: function (el) { if (el && el.removeAttribute) el.removeAttribute(ATTR); },
-    list: function () { return all(document.documentElement); }
-  };
-  refresh();
-  new MutationObserver(function (recs) {
-    if (writing) return;
-    recs.forEach(function (r) {
-      if (r.type === 'attributes' && r.attributeName === ATTR) { apply(r.target); return; }
-      if (r.type === 'characterData') {
-        var p = r.target.parentElement;
-        if (p && p.hasAttribute && p.hasAttribute(ATTR)) apply(p);
-        return;
-      }
-      if (r.type === 'childList') {
-        if (r.target && r.target.nodeType === 1 && r.target.hasAttribute && r.target.hasAttribute(ATTR)) apply(r.target);
-        r.addedNodes && r.addedNodes.forEach(function (n) { all(n).forEach(apply); });
-      }
-    });
-  }).observe(document.documentElement, {
-    childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: [ATTR]
-  });
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', refresh);
-  setTimeout(refresh, 120); setTimeout(refresh, 600); setTimeout(refresh, 1800);
-};
-
-/* ===================== РАНТАЙМ ЭКРАНОВ (уходит в экспорт) ===================== */
-var RUNTIME_SCREENS = function () {
-  if (window.AVScreens) return;
-  var PAGE = '[data-screen],.screen,.page,.av-page,[id^="screen-"],[id^="page-"],[id^="subpage-"]';
-  var DLG = '.overlay,.av-modal,.modal,.dialog,[data-dialog],[id^="overlay-"],[id^="modal-"],[id^="dialog-"],#journal,#shutdown-overlay';
-  var SAVER = '[data-screensaver],#splash,#screensaver';
-  var ACT = ['is-active', 'active', 'is-open', 'open', 'visible', 'is-visible', 'show', 'shown'];
-  function nodes() {
-    return Array.from(document.querySelectorAll(PAGE + ',' + DLG + ',' + SAVER))
-      .filter(function (n) { return !n.closest('[data-pe-ui]'); });
-  }
-  function kind(n) {
-    if (!n) return 'page';
-    if (n.matches(SAVER) || /screensaver|saver|standby|idle|splash/i.test(n.id || '')) return 'saver';
-    if (n.matches(PAGE)) return 'page';
-    return 'dialog';
-  }
-  function on(n) {
-    var cls = String(n.getAttribute('class') || '').split(/\s+/);
-    if (kind(n) === 'saver') return !n.classList.contains('is-hidden');
-    return ACT.some(function (t) { return cls.indexOf(t) >= 0; });
-  }
-  function activate(n) {
-    var k = kind(n);
-    n.classList.remove('hidden', 'is-hidden');
-    if (k === 'dialog') { n.classList.add('is-active'); if (n.classList.contains('overlay') || n.hasAttribute('data-drawer')) n.classList.add('is-open'); }
-    else if (k === 'page') { n.classList.add('is-active'); if (n.classList.contains('page')) n.classList.add('active'); }
-  }
-  function deactivate(n) {
-    var k = kind(n);
-    ACT.forEach(function (t) { n.classList.remove(t); });
-    if (k === 'saver') n.classList.add('is-hidden');
-    else if (n.hasAttribute('data-screen')) n.classList.add('hidden');
-  }
-  function byId(x) {
-    if (!x) return null;
-    if (typeof x !== 'string') return x;
-    return document.getElementById(x) || document.querySelector('[data-screen="' + x + '"],[data-dialog="' + x + '"]');
-  }
-  window.AVScreens = {
-    list: function () { return nodes().map(function (n) { return { id: n.id || '', kind: kind(n), active: on(n), el: n }; }); },
-    kind: function (x) { return kind(byId(x)); },
-    active: function () {
-      var l = nodes().filter(on);
-      var d = l.filter(function (n) { return kind(n) === 'dialog'; });
-      if (d.length) return d[d.length - 1];
-      var p = l.filter(function (n) { return kind(n) === 'page'; });
-      return p[p.length - 1] || l[l.length - 1] || null;
-    },
-    show: function (x) {
-      var el = byId(x); if (!el) return false;
-      var k = kind(el);
-      if (k === 'page') {
-        if (window.Panel && typeof window.Panel.showPage === 'function' && el.id) { try { window.Panel.showPage(el.id); } catch (e) {} }
-        nodes().forEach(function (n) { if (n !== el && kind(n) !== 'saver') deactivate(n); });
-        activate(el);
-      } else if (k === 'dialog') {
-        nodes().forEach(function (n) { if (n !== el && kind(n) === 'dialog') deactivate(n); });
-        if (!nodes().some(function (n) { return kind(n) === 'page' && on(n); })) {
-          var first = nodes().filter(function (n) { return kind(n) === 'page'; })[0];
-          if (first) activate(first);
-        }
-        if (window.Panel && typeof window.Panel.openDialog === 'function' && el.id) { try { window.Panel.openDialog(el.id); } catch (e) {} }
-        activate(el);
-      } else { activate(el); }
-      return true;
-    },
-    open: function (x) { return window.AVScreens.show(x); },
-    close: function (x) { var el = byId(x); if (!el) return false; deactivate(el); return true; },
-    refresh: function () {
-      if (window.AVStates) window.AVStates.refresh();
-      if (window.AVTextLock) window.AVTextLock.refresh();
-      if (window.Panel && typeof window.Panel.rebuild === 'function') { try { window.Panel.rebuild(); } catch (e) {} }
-    }
-  };
-};
-
-
-/* ===================== РАНТАЙМ ВИДИМОСТИ (уходит в экспорт) ===================== */
-var RUNTIME_VISIBILITY = function () {
-  if (window.AVVisibility) return;
-  function apply(el, val) {
-    var show = !!Number(val) || val === true || val === 'true';
-    el.classList.toggle('hidden', !show);
-    el.toggleAttribute('data-vis-hidden', !show);
-  }
-  function rx(join, value) {
-    var key = String(join);
-    document.querySelectorAll('[data-visibility-join]').forEach(function (el) {
-      if (String(el.getAttribute('data-visibility-join')) === key) apply(el, value);
-    });
-  }
-  window.AVVisibility = { apply: apply, rx: rx };
-  document.addEventListener('av:digital', function (e) {
-    if (e.detail && e.detail.join != null) rx(e.detail.join, e.detail.value);
-  });
-};
-
-
-
-
-function injectRuntime(id, fn) {
-  if (document.getElementById(id)) return;
-  var s = document.createElement('script');
-  s.id = id; s.textContent = '(' + fn.toString() + ')();';
-  document.body.appendChild(s);
+if (!window.AVStates || !window.AVVisibility || !window.AVRadio || !window.AVStepRepeat) {
+  console.error('[Panel Editor] Нужен av-core.js v3.1+ со встроенными рантаймами. Обновите ядро рядом с панелью.');
 }
-injectRuntime('av-states-runtime', RUNTIME_STATES);
-injectRuntime('av-text-lock-runtime', RUNTIME_LOCK);
-injectRuntime('av-screens-runtime', RUNTIME_SCREENS);
-RUNTIME_STATES(); RUNTIME_LOCK(); RUNTIME_SCREENS();
 
-injectRuntime('av-visibility-runtime', RUNTIME_VISIBILITY);
-RUNTIME_VISIBILITY();
 
 /* ===================== МОДЕЛЬ JOIN: ОДИН ЭЛЕМЕНТ — ОДИН JOIN НА РОЛЬ ===================== */
 
@@ -279,6 +55,7 @@ ROLES.forEach(function (r) {
   r.alias.forEach(function (a) { JOIN_ATTRS.push(a); ATTR_ROLE[a] = r.key; });
 });
 var BIND_TIME_ATTRS = ['data-latch', 'data-local', 'data-preset-save'];
+
 var SHOWN_ATTRS = JOIN_ATTRS.concat([
   'data-cmd-mode', 'data-state-type', 'data-state-mode', 'data-nav', 'data-app', 'data-active-class',
   'data-nav-dialog', 'data-nav-back', 'data-nav-toggle', 'data-nav-reset', 'data-nav-key',
@@ -290,12 +67,16 @@ var SHOWN_ATTRS = JOIN_ATTRS.concat([
   'data-list-empty', 'data-list-seed', 'data-list-colors', 'data-list-template', 'data-field',
   'data-route-dest', 'data-route-src', 'data-route-current', 'data-route-default', 'data-route-labels',
   'data-cam-pose', 'data-pose-scene', 'data-power-for', 'data-brightness-for', 'data-theme-toggle',
-  'data-sound-toggle', 'data-width', 'data-height', 'data-panel-root', 'data-suffix', 'data-drawer'
+  'data-sound-toggle', 'data-width', 'data-height', 'data-panel-root', 'data-suffix', 'data-drawer',
+  'data-radio-group', 'data-radio-local', 'data-radio-scope', 'data-repeat', 'data-repeat-delay', 'data-repeat-rate'
 ]);
+
 var MANAGED_ATTRS = SHOWN_ATTRS.concat([
   'data-states', 'data-state-index', 'data-role', 'data-cmd-value', 'data-cmd-pulse-ms',
   'data-state-pulse-ms', 'data-cmd-echo', 'data-text-lock'
 ]);
+
+
 var LOCK_ATTR = 'data-text-lock';
 var NAME_RE = /^[A-Za-z][A-Za-z0-9_.\-]*$/;
 var ACTIVE_TOKENS = ['is-active', 'active', 'is-open', 'open', 'visible', 'is-visible', 'show', 'shown'];
@@ -1159,7 +940,7 @@ function bakeElementHTML(el) {
 
 
 
-function cleanDocument() {
+function cleanDocument(forVerify) {
   syncLiveFields(document.body);
   var d = document.documentElement.cloneNode(true);
   Array.from(d.querySelectorAll('[data-pe-ui]')).forEach(function (n) { n.remove(); });
@@ -1167,13 +948,23 @@ function cleanDocument() {
   var b = d.querySelector('body'); if (b) b.classList.remove('pe-editing');
   var r = d.querySelector('[data-pe-root]'); if (r) r.removeAttribute('data-pe-root');
   PE.lastReset = normalizeBoot(d);
-  var lock = d.querySelector('#av-text-lock-runtime');
-  if (lock && b) {
-    var firstScript = b.querySelector('script:not(#av-text-lock-runtime):not(#av-states-runtime):not(#av-screens-runtime)');
-    if (firstScript) b.insertBefore(lock, firstScript); else b.insertBefore(lock, b.firstChild);
+
+
+  /* legacy: рантаймы теперь в ядре — вырезаем инжектированные скрипты старых версий */
+  Array.from(d.querySelectorAll('script[id^="av-"][id$="-runtime"]')).forEach(function (n) { n.remove(); });
+
+
+  if (forVerify) {
+    var st = d.querySelector('[data-panel-root], #panel-stage');
+    if (st) { st.setAttribute('data-transport', 'mock'); st.removeAttribute('data-ws-url'); }
+    Array.from(d.querySelectorAll('script[src]')).forEach(function (n) {
+      if (/cr-com-lib|webxpanel/i.test(n.getAttribute('src') || '')) n.remove();
+    });
+    var tg = d.querySelector('#av-touch-guard'); if (tg) tg.remove();
   }
   return '<!DOCTYPE html>\n' + d.outerHTML + '\n';
 }
+
 function pathOf(n) {
   var parts = [], el = n, guard = 0;
   while (el && el.parentElement && guard++ < 30) {
@@ -1187,7 +978,7 @@ function verifySaved() {
   PE.verifying = true;
   var btn = $('pe-verify'); if (btn) { btn.disabled = true; btn.textContent = 'Проверяю…'; }
   var html;
-  try { html = cleanDocument(); }
+  try { html = cleanDocument(true); }
   catch (e) { PE.verifying = false; if (btn) { btn.disabled = false; btn.textContent = 'Проверить сохранённый файл'; } toast('err', e.message); return; }
   var want = lockedList().map(function (n) {
     return { key: n.id ? 'id:' + n.id : 'path:' + pathOf(n), text: n.getAttribute(LOCK_ATTR), note: noteOf(n) };
@@ -2290,7 +2081,15 @@ if (!PE.sel) {
     '<button class="pe-btn sm pri" id="pe-dadd">＋</button></div></div></div>';
 
   var opts = Array.from(registry().keys()).map(function (v) { return '<option value="' + esc(v) + '">'; }).join('');
-  var extra = ['data-nav', 'data-nav-dialog', 'data-nav-back', 'data-nav-toggle', 'data-nav-reset', 'data-nav-key', 'data-visibility', 'data-initial', 'data-active-style', 'data-latch', 'data-local', 'id', 'class'];
+
+  var extra = [
+    'data-nav', 'data-nav-dialog', 'data-nav-back', 'data-nav-toggle', 'data-nav-reset', 'data-nav-key',
+    'data-radio-group', 'data-radio-local', 'data-repeat',
+    'data-visibility', 'data-initial', 'data-active-style', 'data-latch', 'data-local', 'id', 'class'
+  ];
+
+
+
   var rows2 = extra.map(function (k) {
     var v = a.getNamedItem(k) ? a.getNamedItem(k).value : '';
     return '<div class="pe-row"><label>' + esc(k.replace('data-', '')) + '</label><input class="pe-inp" data-attr="' + k + '" value="' + esc(v) + '"></div>';
@@ -2651,6 +2450,10 @@ function duplicateSel() {
   plans.forEach(function (p) {
     syncLiveFields(p.el);
     var c = p.el.cloneNode(true);
+
+   try { delete c._bound; } catch (e) {}
+   c.querySelectorAll('*').forEach(function (n) { try { delete n._bound; } catch (e) {} });
+
     c.removeAttribute('id');
     c.querySelectorAll('[id]').forEach(function (n) { n.removeAttribute('id'); });
 
