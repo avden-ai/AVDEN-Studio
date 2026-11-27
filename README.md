@@ -5,7 +5,7 @@
 > **Проект:** AVDEN-Studio · **Автор и создатель архитектуры:** Вяхирев Алексей Алексеевич (Alexey A. Vyakhirev) · 2026
 
 ---
-<img width="1536" height="797" alt="page1" src="https://github.com/user-attachments/assets/1879156e-af0d-4d9d-a555-745866ba0a0d" />
+<img width="1340" height="672" alt="Page2" src="https://github.com/user-attachments/assets/c5fc6993-9f58-4081-a4d5-9019f9beca18" />
 
 ## Философия и ключевые особенности
 
