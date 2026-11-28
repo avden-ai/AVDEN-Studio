@@ -72,6 +72,7 @@
   <button class="av-btn h-12 px-4 is-active" data-radio-group="lighting" data-radio-local data-join-digital="light.scene.1"><span>Лекция</span></button>
   <button class="av-btn h-12 px-4" data-radio-group="lighting" data-radio-local data-join-digital="light.scene.2"><span>Кино</span></button>
   ```
+
 - **Многосостоянийная кнопка (3+ состояний):**
   ```html
   <button class="av-btn h-12 px-4"
@@ -81,7 +82,9 @@
     <span data-role="label" class="av-label">Выкл</span>
   </button>
   ```
-  *(Внутри `[data-role="label"]` НЕ ставь `data-join-string` — текстом управляет `data-states`).*
+  *(При необходимости можно добавить `data-join-digital="..."` на ту же кнопку для отправки цифрового импульса `1`/`0` при нажатии. Внутри `[data-role="label"]` НЕ ставь `data-join-string` — текстом управляет `data-states`).*
+
+
 - **Тумблер (Switch):**
   ```html
   <button class="av-toggle" data-join-digital="display.power" data-initial="1" data-label-on="Вкл" data-label-off="Выкл" role="switch" aria-pressed="false">

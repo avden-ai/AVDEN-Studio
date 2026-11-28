@@ -1,5 +1,5 @@
 /* =====================================================================================
-   AVDEN-Studio · PANEL EDITOR v4.4+
+   AVDEN-Studio · PANEL EDITOR v4.4.1
    Встраиваемый визуальный WYSIWYG-редактор и менеджер сигналов для AV-панелей
 
    Copyright 2026 Вяхирев Алексей Алексеевич (Alexey A. Vyakhirev)
@@ -29,6 +29,83 @@ window.__panelEditorLoaded = true;
 if (!window.AVStates || !window.AVVisibility || !window.AVRadio || !window.AVStepRepeat) {
   console.error('[Panel Editor] Нужен av-core.js v3.1+ со встроенными рантаймами. Обновите ядро рядом с панелью.');
 }
+
+
+
+function ensureStatesRuntime() {
+  if (window.AVStates) return;
+  if (document.getElementById('av-states-compat')) return;
+  var sc = document.createElement('script');
+  sc.id = 'av-states-compat';
+  sc.textContent = '(' + function () {
+    if (window.AVStates) return;
+    function isNum(v) { return /^\d+$/.test(String(v)); }
+    function token(v) { return isNum(v) ? +v : String(v); }
+    function normJoin(j) { return j == null ? '' : String(j).trim(); }
+    function statesOf(el) { try { return JSON.parse(el.getAttribute('data-states') || '[]'); } catch (e) { return []; } }
+    function apply(el, idx) {
+      if (!el || el.nodeType !== 1) return;
+      var list = statesOf(el); if (!list.length) return;
+      idx = Math.max(0, Math.min(list.length - 1, idx | 0));
+      var st = list[idx] || {};
+      el.setAttribute('data-state-index', String(idx));
+      var lab = el.querySelector('[data-role="label"]');
+      if (lab && st.label != null && !lab.hasAttribute('data-text-lock')) lab.textContent = st.label;
+      var ico = el.querySelector('[data-role="icon"]');
+      if (ico) {
+        if (st.svg) ico.innerHTML = st.svg;
+        else if (st.img) ico.innerHTML = '<img alt="" src="' + st.img.replace(/"/g, '&quot;') + '">';
+        else ico.innerHTML = '';
+        var ch = ico.firstElementChild;
+        if (ch) { ch.style.width = '100%'; ch.style.height = '100%'; ch.style.display = 'block'; ch.style.objectFit = 'contain'; }
+      }
+      if (st.color) {
+        el.style.setProperty('--st-c', st.color);
+        el.style.borderColor = 'color-mix(in srgb, ' + st.color + ' 55%, transparent)';
+      }
+      if (st.bg) {
+        el.style.setProperty('--st-bg', st.bg);
+        el.style.background = 'linear-gradient(180deg, ' + st.bg + ', rgba(13,26,41,.7))';
+      }
+      el.setAttribute('aria-pressed', idx > 0 ? 'true' : 'false');
+    }
+    window.AVStates = {
+      apply: apply, states: statesOf, token: token,
+      refresh: function () {
+        document.querySelectorAll('[data-states]').forEach(function (el) {
+          if (!el.closest('[data-pe-ui]')) apply(el, +(el.getAttribute('data-state-index') || 0));
+        });
+      },
+      rx: function (join, value) {
+        var key = normJoin(join);
+        document.querySelectorAll('[data-states]').forEach(function (el) {
+          if (!el.closest('[data-pe-ui]') && normJoin(el.getAttribute('data-state-join') || el.getAttribute('data-cmd-join')) === key) apply(el, value);
+        });
+      }
+    };
+    document.addEventListener('click', function (e) {
+      if (document.body.classList.contains('pe-editing')) return;
+      var el = e.target.closest && e.target.closest('[data-states]');
+      if (!el || el.closest('[data-pe-ui]') || el.hasAttribute('data-static')) return;
+      var list = statesOf(el); if (!list.length) return;
+      var cur = +(el.getAttribute('data-state-index') || 0);
+      var next = el.getAttribute('data-cmd-mode') === 'set' ? parseInt(el.getAttribute('data-cmd-value') || '0', 10) : (cur + 1) % list.length;
+      apply(el, next);
+      var j = el.getAttribute('data-state-join') || el.getAttribute('data-cmd-join');
+      if (j && typeof window.sendControlSignal === 'function') window.sendControlSignal('analog', token(j), next);
+      else if (j && window.Panel && typeof window.Panel.send === 'function') window.Panel.send('analog', token(j), next);
+    });
+    ['av:analog', 'av:serial'].forEach(function (ev) {
+      document.addEventListener(ev, function (e) { if (e.detail && e.detail.join != null) window.AVStates.rx(e.detail.join, e.detail.value); });
+    });
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.AVStates.refresh);
+    else window.AVStates.refresh();
+  }.toString() + ')();';
+  document.body.appendChild(sc);
+}
+
+
+if (!window.AVStates && document.querySelector('[data-states]')) ensureStatesRuntime();
 
 
 /* ===================== МОДЕЛЬ JOIN: ОДИН ЭЛЕМЕНТ — ОДИН JOIN НА РОЛЬ ===================== */
@@ -845,15 +922,17 @@ function applyLayout() {
   var w = root.offsetWidth, hgt = root.offsetHeight;
   if (!w || !hgt) { layoutStyle.textContent = ''; return; }
   try { root.setAttribute('data-pe-root', '1'); } catch (e) {}
+  layoutStyle.textContent = '[data-pe-root]{left:0 !important;top:0 !important;margin:0 !important;}';
   var dockW = (PE.dock && PE.on) ? DOCK_W : 0, top = PE.bar ? BAR_H : 0, m = PE.margin;
   var k = Math.min(Math.max(160, window.innerWidth - dockW - m * 2) / w, Math.max(120, window.innerHeight - top - m * 2) / hgt);
   var lc = layoutCenter(root);
   var tx = (window.innerWidth - dockW) / 2 - lc.x, ty = top + (window.innerHeight - top) / 2 - lc.y;
-  layoutStyle.textContent = '[data-pe-root]{transform:translate(' + tx.toFixed(2) + 'px,' + ty.toFixed(2) +
+  layoutStyle.textContent = '[data-pe-root]{left:0 !important;top:0 !important;margin:0 !important;transform:translate(' + tx.toFixed(2) + 'px,' + ty.toFixed(2) +
     'px) scale(' + k.toFixed(4) + ') !important;transform-origin:center center !important;}';
   PE.scale = k;
   if (chip) chip.innerHTML = 'масштаб <b>' + Math.round(k * 100) + '%</b>';
 }
+
 
 /* ===================== СЕРИАЛИЗАЦИЯ ===================== */
 function cleanNode(n) {
@@ -2673,6 +2752,9 @@ function writeStates(el, list) {
     Array.from(el.childNodes).forEach(function (n) { if (n.nodeType === 3) n.remove(); });
     el.appendChild(lb);
   }
+
+  ensureStatesRuntime();  
+
   if (window.AVStates) window.AVStates.apply(el, +(el.getAttribute('data-state-index') || 0));
 }
 function renderStates() {
@@ -2872,6 +2954,12 @@ function insertFromLib(html, mode) {
     if (targetAfter) targetAfter.after(n);
     else hostScreen.appendChild(n);
   }
+
+
+if (n.hasAttribute('data-states') || n.querySelector('[data-states]')) {
+  ensureStatesRuntime();
+}
+
 
   select(n);
   softRebind();
@@ -3132,7 +3220,7 @@ setTimeout(function () {
   if (d.shared.length) toast('warn', 'Общий digital join у ' + d.shared.length + ' групп — вкладка Join’ы → Развести');
   else {
     var a = activeScreen();
-    toast('ok', 'Panel Editor v4.4 · join экранов виден в чипе ▣' + (a ? ': D ' + (screenJoin(a) || '—') : ''));
+    toast('ok', 'Panel Editor v4.4.1 · join экранов виден в чипе ▣' + (a ? ': D ' + (screenJoin(a) || '—') : ''));
   }
 }, 400);
 })();

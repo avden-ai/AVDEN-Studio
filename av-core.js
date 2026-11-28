@@ -1,5 +1,5 @@
 /* =====================================================================================
-   AVDEN-Studio · AV-CORE · v3.1 «Dual Transport»
+   AVDEN-Studio · AV-CORE · v3.1.1 «Dual Transport»
    Controller-First Runtime для AV-панелей · сменные транспорты · декларативный DOM
 
    Copyright 2026 Вяхирев Алексей Алексеевич (Alexey A. Vyakhirev)
@@ -28,7 +28,8 @@
    • Panel.diagnostics() / stats()    — диагностика привязок и состояния моста
 
    1. Исправлено - увод курсора мыши с кнопки без выдачи joun = 0
-   2. Появление меню при удержании пальца на сенсорных экранах
+   2. Убрано появление меню при удержании пальца на сенсорных экранах
+   3. Поддержка одновременного digital и state-analog join на мультикнопках
 
    ===================================================================================== */
 
@@ -39,7 +40,7 @@
   window.__avCoreLoaded = true;
 
   /* ===================== КОНФИГУРАЦИЯ И СОСТОЯНИЕ ===================== */
-  var CORE_VERSION = '3.1';
+  var CORE_VERSION = '3.1.1';
   var DEFAULT_WS = 'ws://192.168.1.49:1880/socket';
   var ACTIVE_TOKENS = ['is-active', 'active', 'is-open', 'open', 'visible', 'is-visible', 'show', 'shown'];
   var DEFAULT_LIST_COLORS = ['#2DD4BF', '#38BDF8', '#E879F9', '#FBBF24', '#34D399', '#A78BFA', '#F97316'];
@@ -910,13 +911,17 @@
     updateVerticalSliders(scope);
     emit('tab', { target: target });
   }
+
+
   function bindButtons() {
     var sel = 'button,[role="button"],[data-join-digital],[data-digital-join],[data-cmd-join],[data-nav],[data-nav-back],[data-nav-dialog],[data-screensaver],#splash';
     document.querySelectorAll(sel).forEach(function (el) {
       if (isEditorNode(el) || el._bound) return;
       if (el.matches('[data-screen],.av-page,[data-dialog],.av-modal,input,textarea,select')) return;
       el._bound = true;
-      var digJoin = getDigitalJoin(el);
+      var digJoin = el.hasAttribute('data-states')
+        ? getAttr(el, ['data-join-digital', 'data-digital-join'])
+        : getDigitalJoin(el);
       var saveJoin = el.getAttribute('data-preset-save');
       var isLatch = el.hasAttribute('data-latch'), isLocal = el.hasAttribute('data-local');
       var holdTimer = null, holdFired = false;
@@ -940,7 +945,7 @@
           }, 3000);
           return;
         }
-        if (digJoin && !el.hasAttribute('data-states')) {
+        if (digJoin) {
           if (isLatch) {
             var next = state.digital[digJoin] ? 0 : 1;
             sendControlSignal('digital', digJoin, next);
@@ -975,7 +980,7 @@
           }
           return;
         }
-        if (digJoin && !isLatch && !el.hasAttribute('data-states')) sendControlSignal('digital', digJoin, 0);
+        if (digJoin && !isLatch) sendControlSignal('digital', digJoin, 0);
       }
 
 
@@ -1001,6 +1006,10 @@
       });
     });
   }
+
+
+
+
   function bindSliders() {
     document.querySelectorAll('input[type="range"]').forEach(function (inp) {
       if (isEditorNode(inp) || inp._bound) return;
@@ -1382,9 +1391,12 @@
       if (isEditorNode(el) || el.closest('[data-no-join]')) return;
       out.push({ t: 'D', j: getDigitalJoin(el), el: el });
     });
-    document.querySelectorAll('[data-join-analog],[data-analog-join]').forEach(function (el) {
+    document.querySelectorAll('[data-join-analog],[data-analog-join],[data-state-join]').forEach(function (el) {
       if (isEditorNode(el) || el.closest('[data-no-join]')) return;
-      out.push({ t: 'A', j: getAnalogJoin(el), el: el });
+      var aj = getAnalogJoin(el);
+      if (aj) out.push({ t: 'A', j: aj, el: el });
+      var sj = normJoin(el.getAttribute('data-state-join'));
+      if (sj && sj !== aj) out.push({ t: 'A', j: sj, el: el });
     });
     document.querySelectorAll('[data-join-string],[data-text-join]').forEach(function (el) {
       if (isEditorNode(el) || el.closest('[data-no-join]')) return;
